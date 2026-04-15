@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: self-healing-cloud-app
+  namespace: default
+  labels:
+    app.kubernetes.io/name: self-healing-cloud-app
+    app.kubernetes.io/managed-by: self-healing-cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: self-healing-cloud-app
+      app.kubernetes.io/managed-by: self-healing-cloud
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: self-healing-cloud-app
+        app.kubernetes.io/managed-by: self-healing-cloud
+    spec:
+      containers:
+        - name: self-healing-cloud-app
+          image: nginx:stable
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: self-healing-cloud-app-svc
+  namespace: default
+  labels:
+    app.kubernetes.io/name: self-healing-cloud-app
+    app.kubernetes.io/managed-by: self-healing-cloud
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: self-healing-cloud-app
+    app.kubernetes.io/managed-by: self-healing-cloud
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: self-healing-cloud-app-hpa
+  namespace: default
+  labels:
+    app.kubernetes.io/name: self-healing-cloud-app
+    app.kubernetes.io/managed-by: self-healing-cloud
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: self-healing-cloud-app
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
